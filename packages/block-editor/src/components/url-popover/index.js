@@ -62,7 +62,7 @@ class URLPopover extends Component {
 					) }
 				</div>
 				{ showSettings && (
-					<div className="editor-url-popover__row block-editor-url-popover__row editor-url-popover__settings">
+					<div className="editor-url-popover__row block-editor-url-popover__row editor-url-popover__settings block-editor-url-popover__settings">
 						{ renderSettings() }
 					</div>
 				) }
