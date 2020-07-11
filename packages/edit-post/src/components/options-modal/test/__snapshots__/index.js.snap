@@ -10,18 +10,23 @@ exports[`OptionsModal should match snapshot when the modal is active 1`] = `
     title="General"
   >
     <WithSelect(WithDispatch(IfViewportMatches(BaseOption)))
-      label="Enable Pre-publish Checks"
-    />
-    <WithSelect(WithDispatch(DeferredOption))
-      label="Enable Tips"
+      label="Pre-publish checks"
     />
     <WithSelect(WithDispatch(BaseOption))
-      feature="showInserterHelpPanel"
-      label="Enable Inserter Help Panel"
+      featureName="mostUsedBlocks"
+      label="Enable the Most Used Blocks category in the block library"
     />
   </Section>
   <Section
-    title="Document Panels"
+    title="Keyboard options"
+  >
+    <WithSelect(WithDispatch(BaseOption))
+      featureName="keepCaretInsideBlock"
+      label="Contain text cursor inside active block"
+    />
+  </Section>
+  <Section
+    title="Document panels"
   >
     <EnablePluginDocumentSettingPanelOptionSlot />
     <WithSelect(PostTaxonomies)
@@ -29,7 +34,7 @@ exports[`OptionsModal should match snapshot when the modal is active 1`] = `
     />
     <PostFeaturedImageCheck>
       <WithSelect(IfCondition(WithDispatch(BaseOption)))
-        label="Featured Image"
+        label="Featured image"
         panelName="featured-image"
       />
     </PostFeaturedImageCheck>
@@ -54,13 +59,13 @@ exports[`OptionsModal should match snapshot when the modal is active 1`] = `
     </WithSelect(PostTypeSupportCheck)>
     <WithSelect(PageAttributesCheck)>
       <WithSelect(IfCondition(WithDispatch(BaseOption)))
-        label="Page Attributes"
+        label="Page attributes"
         panelName="page-attributes"
       />
     </WithSelect(PageAttributesCheck)>
   </Section>
   <WithSelect(MetaBoxesSection)
-    title="Advanced Panels"
+    title="Advanced panels"
   />
 </WithInstanceId(Modal)>
 `;

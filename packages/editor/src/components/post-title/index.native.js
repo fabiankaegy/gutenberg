@@ -8,7 +8,11 @@ import { isEmpty } from 'lodash';
  * WordPress dependencies
  */
 import { Component } from '@wordpress/element';
-import { RichText } from '@wordpress/rich-text';
+import {
+	__experimentalRichText as RichText,
+	create,
+	insert,
+} from '@wordpress/rich-text';
 import { decodeEntities } from '@wordpress/html-entities';
 import { withDispatch, withSelect } from '@wordpress/data';
 import { withFocusOutside } from '@wordpress/components';
@@ -22,9 +26,21 @@ import { pasteHandler } from '@wordpress/blocks';
 import styles from './style.scss';
 
 class PostTitle extends Component {
+	constructor( props ) {
+		super( props );
+
+		this.setRef = this.setRef.bind( this );
+	}
 	componentDidUpdate( prevProps ) {
-		// Unselect if any other block is selected
-		if ( this.props.isSelected && ! prevProps.isAnyBlockSelected && this.props.isAnyBlockSelected ) {
+		// Unselect if any other block is selected and blur the RichText
+		if (
+			this.props.isSelected &&
+			! prevProps.isAnyBlockSelected &&
+			this.props.isAnyBlockSelected
+		) {
+			if ( this.richTextRef ) {
+				this.richTextRef.blur();
+			}
 			this.props.onUnselect();
 		}
 	}
@@ -43,6 +59,23 @@ class PostTitle extends Component {
 		this.props.onSelect();
 	}
 
+	onPaste( { value, onChange, plainText } ) {
+		const content = pasteHandler( {
+			plainText,
+			mode: 'INLINE',
+			tagName: 'p',
+		} );
+
+		if ( typeof content === 'string' ) {
+			const valueToInsert = create( { html: content } );
+			onChange( insert( value, valueToInsert ) );
+		}
+	}
+
+	setRef( richText ) {
+		this.richTextRef = richText;
+	}
+
 	render() {
 		const {
 			placeholder,
@@ -50,29 +83,38 @@ class PostTitle extends Component {
 			title,
 			focusedBorderColor,
 			borderStyle,
+			isDimmed,
 		} = this.props;
 
 		const decodedPlaceholder = decodeEntities( placeholder );
-		const borderColor = this.props.isSelected ? focusedBorderColor : 'transparent';
+		const borderColor = this.props.isSelected
+			? focusedBorderColor
+			: 'transparent';
 
 		return (
 			<View
-				style={ [ styles.titleContainer, borderStyle, { borderColor } ] }
+				style={ [
+					styles.titleContainer,
+					borderStyle,
+					{ borderColor },
+					isDimmed && styles.dimmed,
+				] }
 				accessible={ ! this.props.isSelected }
 				accessibilityLabel={
-					isEmpty( title ) ?
-						/* translators: accessibility text. empty post title. */
-						__( 'Post title. Empty' ) :
-						sprintf(
-							/* translators: accessibility text. %s: text content of the post title. */
-							__( 'Post title. %s' ),
-							title
-						)
+					isEmpty( title )
+						? /* translators: accessibility text. empty post title. */
+						  __( 'Post title. Empty' )
+						: sprintf(
+								/* translators: accessibility text. %s: text content of the post title. */
+								__( 'Post title. %s' ),
+								title
+						  )
 				}
 			>
 				<RichText
+					setRef={ this.setRef }
 					tagName={ 'p' }
-					rootTagsToEliminate={ [ 'strong' ] }
+					tagsToEliminate={ [ 'strong' ] }
 					unstableOnFocus={ this.props.onSelect }
 					onBlur={ this.props.onBlur } // always assign onBlur as a props
 					multiline={ false }
@@ -84,15 +126,15 @@ class PostTitle extends Component {
 					onChange={ ( value ) => {
 						this.props.onUpdate( value );
 					} }
+					onPaste={ this.onPaste }
 					placeholder={ decodedPlaceholder }
 					value={ title }
-					onSelectionChange={ () => { } }
+					onSelectionChange={ () => {} }
 					onEnter={ this.props.onEnterPress }
 					disableEditingMenu={ true }
-					__unstablePasteHandler={ pasteHandler }
 					__unstableIsSelected={ this.props.isSelected }
-				>
-				</RichText>
+					__unstableOnCreateUndoLevel={ () => {} }
+				></RichText>
 			</View>
 		);
 	}
@@ -100,28 +142,29 @@ class PostTitle extends Component {
 
 export default compose(
 	withSelect( ( select ) => {
-		const {
-			isPostTitleSelected,
-		} = select( 'core/editor' );
+		const { isPostTitleSelected } = select( 'core/editor' );
 
-		const { getSelectedBlockClientId } = select( 'core/block-editor' );
+		const { getSelectedBlockClientId, getBlockRootClientId } = select(
+			'core/block-editor'
+		);
+
+		const selectedId = getSelectedBlockClientId();
+		const selectionIsNested = !! getBlockRootClientId( selectedId );
 
 		return {
-			isAnyBlockSelected: !! getSelectedBlockClientId(),
+			isAnyBlockSelected: !! selectedId,
 			isSelected: isPostTitleSelected(),
+			isDimmed: selectionIsNested,
 		};
 	} ),
 	withDispatch( ( dispatch ) => {
-		const {
-			undo,
-			redo,
-			togglePostTitleSelection,
-		} = dispatch( 'core/editor' );
+		const { undo, redo, togglePostTitleSelection } = dispatch(
+			'core/editor'
+		);
 
-		const {
-			clearSelectedBlock,
-			insertDefaultBlock,
-		} = dispatch( 'core/block-editor' );
+		const { clearSelectedBlock, insertDefaultBlock } = dispatch(
+			'core/block-editor'
+		);
 
 		return {
 			onEnterPress() {
