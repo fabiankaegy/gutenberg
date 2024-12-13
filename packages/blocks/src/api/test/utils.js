@@ -1,9 +1,4 @@
 /**
- * External dependencies
- */
-import { noop } from 'lodash';
-
-/**
  * Internal dependencies
  */
 import { createBlock } from '../factory';
@@ -17,11 +12,16 @@ import {
 	isUnmodifiedDefaultBlock,
 	getAccessibleBlockLabel,
 	getBlockLabel,
+	__experimentalSanitizeBlockAttributes,
+	getBlockAttributesNamesByRole,
+	isContentBlock,
 } from '../utils';
+
+const noop = () => {};
 
 describe( 'block helpers', () => {
 	beforeAll( () => {
-		// Initialize the block store
+		// Initialize the block store.
 		require( '../../store' );
 	} );
 
@@ -210,5 +210,213 @@ describe( 'getAccessibleBlockLabel', () => {
 		expect( getAccessibleBlockLabel( blockType, attributes, 3 ) ).toBe(
 			'Recipe Block. Row 3'
 		);
+	} );
+} );
+
+describe( 'sanitizeBlockAttributes', () => {
+	afterEach( () => {
+		getBlockTypes().forEach( ( block ) => {
+			unregisterBlockType( block.name );
+		} );
+	} );
+
+	it( 'sanitize block attributes not defined in the block type', () => {
+		registerBlockType( 'core/test-block', {
+			attributes: {
+				defined: {
+					type: 'string',
+				},
+			},
+			title: 'Test block',
+		} );
+
+		const attributes = __experimentalSanitizeBlockAttributes(
+			'core/test-block',
+			{
+				defined: 'defined-attribute',
+				notDefined: 'not-defined-attribute',
+			}
+		);
+
+		expect( attributes ).toEqual( {
+			defined: 'defined-attribute',
+		} );
+	} );
+
+	it( 'throws error if the block is not registered', () => {
+		expect( () => {
+			__experimentalSanitizeBlockAttributes(
+				'core/not-registered-test-block',
+				{}
+			);
+		} ).toThrowErrorMatchingInlineSnapshot(
+			`"Block type 'core/not-registered-test-block' is not registered."`
+		);
+	} );
+
+	it( 'handles undefined values and default values', () => {
+		registerBlockType( 'core/test-block', {
+			attributes: {
+				hasDefaultValue: {
+					type: 'string',
+					default: 'default-value',
+				},
+				noDefaultValue: {
+					type: 'string',
+				},
+			},
+			title: 'Test block',
+		} );
+
+		const attributes = __experimentalSanitizeBlockAttributes(
+			'core/test-block',
+			{}
+		);
+
+		expect( attributes ).toEqual( {
+			hasDefaultValue: 'default-value',
+		} );
+	} );
+
+	it( 'handles node and children sources as arrays', () => {
+		registerBlockType( 'core/test-block', {
+			attributes: {
+				nodeContent: {
+					source: 'node',
+				},
+				childrenContent: {
+					source: 'children',
+				},
+				withDefault: {
+					source: 'children',
+					default: 'test',
+				},
+			},
+			title: 'Test block',
+		} );
+
+		const attributes = __experimentalSanitizeBlockAttributes(
+			'core/test-block',
+			{
+				nodeContent: [ 'test-1', 'test-2' ],
+			}
+		);
+
+		expect( attributes ).toEqual( {
+			nodeContent: [ 'test-1', 'test-2' ],
+			childrenContent: [],
+			withDefault: [ 'test' ],
+		} );
+	} );
+} );
+
+describe( 'getBlockAttributesNamesByRole', () => {
+	beforeAll( () => {
+		registerBlockType( 'core/test-block-1', {
+			attributes: {
+				align: {
+					type: 'string',
+				},
+				content: {
+					type: 'boolean',
+					role: 'content',
+				},
+				level: {
+					type: 'number',
+					role: 'content',
+				},
+				color: {
+					type: 'string',
+					role: 'other',
+				},
+			},
+			save: noop,
+			category: 'text',
+			title: 'test block 1',
+		} );
+		registerBlockType( 'core/test-block-2', {
+			attributes: {
+				align: { type: 'string' },
+				content: { type: 'boolean' },
+				color: { type: 'string' },
+			},
+			save: noop,
+			category: 'text',
+			title: 'test block 2',
+		} );
+		registerBlockType( 'core/test-block-3', {
+			save: noop,
+			category: 'text',
+			title: 'test block 3',
+		} );
+	} );
+	afterAll( () => {
+		[
+			'core/test-block-1',
+			'core/test-block-2',
+			'core/test-block-3',
+		].forEach( unregisterBlockType );
+	} );
+	it( 'should return empty array if block has no attributes', () => {
+		expect( getBlockAttributesNamesByRole( 'core/test-block-3' ) ).toEqual(
+			[]
+		);
+	} );
+	it( 'should return all attribute names if no role is provided', () => {
+		expect( getBlockAttributesNamesByRole( 'core/test-block-1' ) ).toEqual(
+			expect.arrayContaining( [ 'align', 'content', 'level', 'color' ] )
+		);
+	} );
+	it( 'should return proper results with existing attributes and provided role', () => {
+		expect(
+			getBlockAttributesNamesByRole( 'core/test-block-1', 'content' )
+		).toEqual( expect.arrayContaining( [ 'content', 'level' ] ) );
+		expect(
+			getBlockAttributesNamesByRole( 'core/test-block-1', 'other' )
+		).toEqual( [ 'color' ] );
+		expect(
+			getBlockAttributesNamesByRole( 'core/test-block-1', 'not-exists' )
+		).toEqual( [] );
+		// A block with no `role` in any attributes.
+		expect(
+			getBlockAttributesNamesByRole( 'core/test-block-2', 'content' )
+		).toEqual( [] );
+	} );
+} );
+
+describe( 'isContentBlock', () => {
+	it( 'returns true if the block has a content role attribute', () => {
+		registerBlockType( 'core/test-content-block', {
+			attributes: {
+				content: {
+					type: 'string',
+					role: 'content',
+				},
+				align: {
+					type: 'string',
+				},
+			},
+			save: noop,
+			category: 'text',
+			title: 'test content block',
+		} );
+		expect( isContentBlock( 'core/test-content-block' ) ).toBe( true );
+	} );
+
+	it( 'returns false if the block does not have a content role attribute', () => {
+		registerBlockType( 'core/test-non-content-block', {
+			attributes: {
+				content: {
+					type: 'string',
+				},
+				align: {
+					type: 'string',
+				},
+			},
+			save: noop,
+			category: 'text',
+			title: 'test non-content block',
+		} );
+		expect( isContentBlock( 'core/test-non-content-block' ) ).toBe( false );
 	} );
 } );

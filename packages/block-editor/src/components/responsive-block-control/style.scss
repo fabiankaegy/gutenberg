@@ -1,6 +1,5 @@
 @mixin screen-reader-text() {
 	border: 0;
-	clip: rect(1px, 1px, 1px, 1px);
 	clip-path: inset(50%);
 	height: 1px;
 	margin: -1px;
@@ -13,7 +12,7 @@
 
 .block-editor-responsive-block-control {
 	margin-bottom: $block-padding*2;
-	border-bottom: 1px solid $light-gray-600;
+	border-bottom: 1px solid $gray-400;
 	padding-bottom: $block-padding;
 
 	&:last-child {

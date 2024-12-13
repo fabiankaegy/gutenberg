@@ -3,68 +3,89 @@
  */
 import {
 	BottomSheet,
-	BottomSheetConsumer,
 	ColorSettings,
-	colorsUtils,
+	FocalPointSettingsPanel,
+	LinkPickerScreen,
 } from '@wordpress/components';
-import { withSelect, withDispatch } from '@wordpress/data';
-import { compose } from '@wordpress/compose';
-import { InspectorControls } from '@wordpress/block-editor';
+import { useDispatch, useSelect } from '@wordpress/data';
 
 /**
  * Internal dependencies
  */
 import styles from './container.native.scss';
+import InspectorControls from '../inspector-controls';
+import ImageLinkDestinationsScreen from '../image-link-destinations';
+import useMultipleOriginColorsAndGradients from '../colors-gradients/use-multiple-origin-colors-and-gradients';
+import { useMobileGlobalStylesColors } from '../global-styles/use-global-styles-context';
+import AdvancedControls from '../inspector-controls-tabs/advanced-controls-panel';
 
-function BottomSheetSettings( {
-	editorSidebarOpened,
-	closeGeneralSidebar,
-	settings,
-	...props
-} ) {
+export const blockSettingsScreens = {
+	settings: 'Settings',
+	color: 'Color',
+	focalPoint: 'FocalPoint',
+	linkPicker: 'linkPicker',
+	imageLinkDestinations: 'imageLinkDestinations',
+};
+
+export default function BottomSheetSettings( props ) {
+	const colorSettings = useMultipleOriginColorsAndGradients();
+	colorSettings.allAvailableColors = useMobileGlobalStylesColors();
+	const { closeGeneralSidebar } = useDispatch( 'core/edit-post' );
+	const editorSidebarOpened = useSelect( ( select ) =>
+		select( 'core/edit-post' ).isEditorSidebarOpened()
+	);
+
 	return (
 		<BottomSheet
 			isVisible={ editorSidebarOpened }
 			onClose={ closeGeneralSidebar }
 			hideHeader
 			contentStyle={ styles.content }
+			hasNavigation
+			testID="block-settings-modal"
 			{ ...props }
 		>
-			<BottomSheetConsumer>
-				{ ( { currentScreen, extraProps, ...bottomSheetProps } ) => {
-					switch ( currentScreen ) {
-						case colorsUtils.subsheets.color:
-							return (
-								<ColorSettings
-									defaultSettings={ settings }
-									{ ...bottomSheetProps }
-									{ ...extraProps }
-								/>
-							);
-						case colorsUtils.subsheets.settings:
-						default:
-							return <InspectorControls.Slot />;
-					}
-				} }
-			</BottomSheetConsumer>
+			<BottomSheet.NavigationContainer animate main>
+				<BottomSheet.NavigationScreen
+					name={ blockSettingsScreens.settings }
+				>
+					<>
+						<InspectorControls.Slot />
+						<AdvancedControls />
+					</>
+				</BottomSheet.NavigationScreen>
+				<BottomSheet.NavigationScreen
+					name={ BottomSheet.SubSheet.screenName }
+				>
+					<BottomSheet.SubSheet.Slot />
+				</BottomSheet.NavigationScreen>
+
+				<BottomSheet.NavigationScreen
+					name={ blockSettingsScreens.color }
+				>
+					<ColorSettings defaultSettings={ colorSettings } />
+				</BottomSheet.NavigationScreen>
+				<BottomSheet.NavigationScreen
+					name={ blockSettingsScreens.focalPoint }
+					fullScreen
+				>
+					<FocalPointSettingsPanel />
+				</BottomSheet.NavigationScreen>
+				<BottomSheet.NavigationScreen
+					name={ blockSettingsScreens.linkPicker }
+					fullScreen
+					isScrollable
+				>
+					<LinkPickerScreen
+						returnScreenName={ blockSettingsScreens.settings }
+					/>
+				</BottomSheet.NavigationScreen>
+				<BottomSheet.NavigationScreen
+					name={ blockSettingsScreens.imageLinkDestinations }
+				>
+					<ImageLinkDestinationsScreen { ...props } />
+				</BottomSheet.NavigationScreen>
+			</BottomSheet.NavigationContainer>
 		</BottomSheet>
 	);
 }
-
-export default compose( [
-	withSelect( ( select ) => {
-		const { isEditorSidebarOpened } = select( 'core/edit-post' );
-		const { getSettings } = select( 'core/block-editor' );
-		return {
-			settings: getSettings(),
-			editorSidebarOpened: isEditorSidebarOpened(),
-		};
-	} ),
-	withDispatch( ( dispatch ) => {
-		const { closeGeneralSidebar } = dispatch( 'core/edit-post' );
-
-		return {
-			closeGeneralSidebar,
-		};
-	} ),
-] )( BottomSheetSettings );

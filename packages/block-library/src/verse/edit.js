@@ -1,7 +1,7 @@
 /**
  * External dependencies
  */
-import classnames from 'classnames';
+import clsx from 'clsx';
 
 /**
  * WordPress dependencies
@@ -11,16 +11,25 @@ import {
 	RichText,
 	BlockControls,
 	AlignmentToolbar,
-	__experimentalBlock as Block,
+	useBlockProps,
 } from '@wordpress/block-editor';
+import { createBlock, getDefaultBlockName } from '@wordpress/blocks';
 
 export default function VerseEdit( {
 	attributes,
 	setAttributes,
-	className,
 	mergeBlocks,
+	onRemove,
+	insertBlocksAfter,
+	style,
 } ) {
 	const { textAlign, content } = attributes;
+	const blockProps = useBlockProps( {
+		className: clsx( {
+			[ `has-text-align-${ textAlign }` ]: textAlign,
+		} ),
+		style,
+	} );
 
 	return (
 		<>
@@ -33,7 +42,7 @@ export default function VerseEdit( {
 				/>
 			</BlockControls>
 			<RichText
-				tagName={ Block.pre }
+				tagName="pre"
 				identifier="content"
 				preserveWhiteSpace
 				value={ content }
@@ -42,12 +51,16 @@ export default function VerseEdit( {
 						content: nextContent,
 					} );
 				} }
-				placeholder={ __( 'Write…' ) }
-				className={ classnames( className, {
-					[ `has-text-align-${ textAlign }` ]: textAlign,
-				} ) }
+				aria-label={ __( 'Verse text' ) }
+				placeholder={ __( 'Write verse…' ) }
+				onRemove={ onRemove }
 				onMerge={ mergeBlocks }
 				textAlign={ textAlign }
+				{ ...blockProps }
+				__unstablePastePlainText
+				__unstableOnSplitAtDoubleLineEnd={ () =>
+					insertBlocksAfter( createBlock( getDefaultBlockName() ) )
+				}
 			/>
 		</>
 	);

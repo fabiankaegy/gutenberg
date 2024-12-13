@@ -1,12 +1,7 @@
 /**
- * External dependencies
- */
-import { clamp } from 'lodash';
-
-/**
  * Parses and retrieves a number value.
  *
- * @param {any} value The incoming value.
+ * @param {unknown} value The incoming value.
  *
  * @return {number} The parsed number value.
  */
@@ -19,26 +14,34 @@ export function getNumber( value ) {
 /**
  * Safely adds 2 values.
  *
- * @param {number|string} args Values to add together.
+ * @param {Array<number|string>} args Values to add together.
  *
  * @return {number} The sum of values.
  */
 export function add( ...args ) {
-	return args.reduce( ( sum, arg ) => sum + getNumber( arg ), 0 );
+	return args.reduce(
+		/** @type {(sum:number, arg: number|string) => number} */
+		( sum, arg ) => sum + getNumber( arg ),
+		0
+	);
 }
 
 /**
  * Safely subtracts 2 values.
  *
- * @param {number|string} args Values to subtract together.
+ * @param {Array<number|string>} args Values to subtract together.
  *
- * @return {number} The difference of the 2 values.
+ * @return {number} The difference of the values.
  */
 export function subtract( ...args ) {
-	return args.reduce( ( diff, arg, index ) => {
-		const value = getNumber( arg );
-		return index === 0 ? value : diff - value;
-	} );
+	return args.reduce(
+		/** @type {(diff:number, arg: number|string, index:number) => number} */
+		( diff, arg, index ) => {
+			const value = getNumber( arg );
+			return index === 0 ? value : diff - value;
+		},
+		0
+	);
 }
 
 /**
@@ -54,12 +57,26 @@ function getPrecision( value ) {
 }
 
 /**
- * Clamps a value based on a min/max range with rounding
+ * Clamps a value based on a min/max range.
  *
  * @param {number} value The value.
- * @param {number} min The minimum range.
- * @param {number} max The maximum range.
- * @param {number} step A multiplier for the value.
+ * @param {number} min   The minimum range.
+ * @param {number} max   The maximum range.
+ *
+ * @return {number} The clamped value.
+ */
+export function clamp( value, min, max ) {
+	const baseValue = getNumber( value );
+	return Math.max( min, Math.min( baseValue, max ) );
+}
+
+/**
+ * Clamps a value based on a min/max range with rounding
+ *
+ * @param {number | string} value The value.
+ * @param {number}          min   The minimum range.
+ * @param {number}          max   The maximum range.
+ * @param {number}          step  A multiplier for the value.
  *
  * @return {number} The rounded and clamped value.
  */
@@ -78,20 +95,4 @@ export function roundClamp(
 	return precision
 		? getNumber( clampedValue.toFixed( precision ) )
 		: clampedValue;
-}
-
-/**
- * Clamps a value based on a min/max range with rounding.
- * Returns a string.
- *
- * @param {any} args Arguments for roundClamp().
- * @property {number} value The value.
- * @property {number} min The minimum range.
- * @property {number} max The maximum range.
- * @property {number} step A multiplier for the value.
- *
- * @return {string} The rounded and clamped value.
- */
-export function roundClampString( ...args ) {
-	return roundClamp( ...args ).toString();
 }

@@ -1,68 +1,92 @@
 /**
  * External dependencies
  */
-import classnames from 'classnames';
+import clsx from 'clsx';
 
 /**
  * WordPress dependencies
  */
-import { __, _x } from '@wordpress/i18n';
+import { __ } from '@wordpress/i18n';
 import { useSelect } from '@wordpress/data';
-import { useState } from '@wordpress/element';
+import { useState, useRef } from '@wordpress/element';
 import {
 	BlockControls,
-	BlockVerticalAlignmentToolbar,
-	InnerBlocks,
+	BlockVerticalAlignmentControl,
+	useInnerBlocksProps,
 	InspectorControls,
-	__experimentalBlock as Block,
+	useBlockProps,
 	__experimentalImageURLInputUI as ImageURLInputUI,
+	store as blockEditorStore,
+	useBlockEditingMode,
+	privateApis as blockEditorPrivateApis,
 } from '@wordpress/block-editor';
 import {
-	PanelBody,
+	RangeControl,
 	TextareaControl,
 	ToggleControl,
-	ToolbarGroup,
+	ToolbarButton,
 	ExternalLink,
 	FocalPointPicker,
+	__experimentalToolsPanel as ToolsPanel,
+	__experimentalToolsPanelItem as ToolsPanelItem,
 } from '@wordpress/components';
+import { isBlobURL, getBlobTypeByURL } from '@wordpress/blob';
 import { pullLeft, pullRight } from '@wordpress/icons';
+import { useEntityProp, store as coreStore } from '@wordpress/core-data';
 
 /**
  * Internal dependencies
  */
 import MediaContainer from './media-container';
+import {
+	DEFAULT_MEDIA_SIZE_SLUG,
+	WIDTH_CONSTRAINT_PERCENTAGE,
+	LINK_DESTINATION_MEDIA,
+	LINK_DESTINATION_ATTACHMENT,
+	TEMPLATE,
+} from './constants';
+import { unlock } from '../lock-unlock';
+import { useToolsPanelDropdownMenuProps } from '../utils/hooks';
 
-/**
- * Constants
- */
-const TEMPLATE = [
-	[
-		'core/paragraph',
-		{
-			fontSize: 'large',
-			placeholder: _x( 'Content…', 'content placeholder' ),
-		},
-	],
-];
+const { ResolutionTool } = unlock( blockEditorPrivateApis );
+
 // this limits the resize to a safe zone to avoid making broken layouts
-const WIDTH_CONSTRAINT_PERCENTAGE = 15;
 const applyWidthConstraints = ( width ) =>
 	Math.max(
 		WIDTH_CONSTRAINT_PERCENTAGE,
 		Math.min( width, 100 - WIDTH_CONSTRAINT_PERCENTAGE )
 	);
 
-const LINK_DESTINATION_MEDIA = 'media';
-const LINK_DESTINATION_ATTACHMENT = 'attachment';
+function getImageSourceUrlBySizeSlug( image, slug ) {
+	// eslint-disable-next-line camelcase
+	return image?.media_details?.sizes?.[ slug ]?.source_url;
+}
 
 function attributesFromMedia( {
 	attributes: { linkDestination, href },
 	setAttributes,
 } ) {
 	return ( media ) => {
+		if ( ! media || ! media.url ) {
+			setAttributes( {
+				mediaAlt: undefined,
+				mediaId: undefined,
+				mediaType: undefined,
+				mediaUrl: undefined,
+				mediaLink: undefined,
+				href: undefined,
+				focalPoint: undefined,
+			} );
+			return;
+		}
+
+		if ( isBlobURL( media.url ) ) {
+			media.type = getBlobTypeByURL( media.url );
+		}
+
 		let mediaType;
 		let src;
-		// for media selections originated from a file upload.
+		// For media selections originated from a file upload.
 		if ( media.media_type ) {
 			if ( media.media_type === 'image' ) {
 				mediaType = 'image';
@@ -72,7 +96,7 @@ function attributesFromMedia( {
 				mediaType = 'video';
 			}
 		} else {
-			// for media selections originated from existing files in the media library.
+			// For media selections originated from existing files in the media library.
 			mediaType = media.type;
 		}
 
@@ -108,7 +132,12 @@ function attributesFromMedia( {
 	};
 }
 
-function MediaTextEdit( { attributes, isSelected, setAttributes } ) {
+function MediaTextEdit( {
+	attributes,
+	isSelected,
+	setAttributes,
+	context: { postId, postType },
+} ) {
 	const {
 		focalPoint,
 		href,
@@ -125,13 +154,71 @@ function MediaTextEdit( { attributes, isSelected, setAttributes } ) {
 		mediaWidth,
 		rel,
 		verticalAlignment,
+		allowedBlocks,
+		useFeaturedImage,
 	} = attributes;
+	const mediaSizeSlug = attributes.mediaSizeSlug || DEFAULT_MEDIA_SIZE_SLUG;
 
-	const image = useSelect(
+	const [ featuredImage ] = useEntityProp(
+		'postType',
+		postType,
+		'featured_media',
+		postId
+	);
+
+	const featuredImageMedia = useSelect(
 		( select ) =>
-			mediaId && isSelected ? select( 'core' ).getMedia( mediaId ) : null,
+			featuredImage &&
+			select( coreStore ).getMedia( featuredImage, { context: 'view' } ),
+		[ featuredImage ]
+	);
+
+	const featuredImageURL = useFeaturedImage
+		? featuredImageMedia?.source_url
+		: '';
+	const featuredImageAlt = useFeaturedImage
+		? featuredImageMedia?.alt_text
+		: '';
+
+	const toggleUseFeaturedImage = () => {
+		setAttributes( {
+			imageFill: false,
+			mediaType: 'image',
+			mediaId: undefined,
+			mediaUrl: undefined,
+			mediaAlt: undefined,
+			mediaLink: undefined,
+			linkDestination: undefined,
+			linkTarget: undefined,
+			linkClass: undefined,
+			rel: undefined,
+			href: undefined,
+			useFeaturedImage: ! useFeaturedImage,
+		} );
+	};
+
+	const { imageSizes, image } = useSelect(
+		( select ) => {
+			const { getSettings } = select( blockEditorStore );
+			return {
+				image:
+					mediaId && isSelected
+						? select( coreStore ).getMedia( mediaId, {
+								context: 'view',
+						  } )
+						: null,
+				imageSizes: getSettings()?.imageSizes,
+			};
+		},
 		[ isSelected, mediaId ]
 	);
+
+	const refMedia = useRef();
+	const imperativeFocalPointPreview = ( value ) => {
+		const { style } = refMedia.current;
+		const { x, y } = value;
+		style.objectPosition = `${ x * 100 }% ${ y * 100 }%`;
+	};
 
 	const [ temporaryMediaWidth, setTemporaryMediaWidth ] = useState( null );
 
@@ -148,15 +235,15 @@ function MediaTextEdit( { attributes, isSelected, setAttributes } ) {
 		setAttributes( {
 			mediaWidth: applyWidthConstraints( width ),
 		} );
-		setTemporaryMediaWidth( applyWidthConstraints( width ) );
+		setTemporaryMediaWidth( null );
 	};
 
-	const classNames = classnames( {
+	const classNames = clsx( {
 		'has-media-on-the-right': 'right' === mediaPosition,
 		'is-selected': isSelected,
 		'is-stacked-on-mobile': isStackedOnMobile,
 		[ `is-vertically-aligned-${ verticalAlignment }` ]: verticalAlignment,
-		'is-image-fill': imageFill,
+		'is-image-fill-element': imageFill,
 	} );
 	const widthString = `${ temporaryMediaWidth || mediaWidth }%`;
 	const gridTemplateColumns =
@@ -167,109 +254,235 @@ function MediaTextEdit( { attributes, isSelected, setAttributes } ) {
 		gridTemplateColumns,
 		msGridColumns: gridTemplateColumns,
 	};
-	const toolbarControls = [
-		{
-			icon: pullLeft,
-			title: __( 'Show media on left' ),
-			isActive: mediaPosition === 'left',
-			onClick: () => setAttributes( { mediaPosition: 'left' } ),
-		},
-		{
-			icon: pullRight,
-			title: __( 'Show media on right' ),
-			isActive: mediaPosition === 'right',
-			onClick: () => setAttributes( { mediaPosition: 'right' } ),
-		},
-	];
 	const onMediaAltChange = ( newMediaAlt ) => {
 		setAttributes( { mediaAlt: newMediaAlt } );
 	};
 	const onVerticalAlignmentChange = ( alignment ) => {
 		setAttributes( { verticalAlignment: alignment } );
 	};
+
+	const imageSizeOptions = imageSizes
+		.filter( ( { slug } ) => getImageSourceUrlBySizeSlug( image, slug ) )
+		.map( ( { name, slug } ) => ( { value: slug, label: name } ) );
+	const updateImage = ( newMediaSizeSlug ) => {
+		const newUrl = getImageSourceUrlBySizeSlug( image, newMediaSizeSlug );
+
+		if ( ! newUrl ) {
+			return null;
+		}
+
+		setAttributes( {
+			mediaUrl: newUrl,
+			mediaSizeSlug: newMediaSizeSlug,
+		} );
+	};
+	const dropdownMenuProps = useToolsPanelDropdownMenuProps();
+
 	const mediaTextGeneralSettings = (
-		<PanelBody title={ __( 'Media & Text settings' ) }>
-			<ToggleControl
+		<ToolsPanel
+			label={ __( 'Settings' ) }
+			resetAll={ () => {
+				setAttributes( {
+					isStackedOnMobile: true,
+					imageFill: false,
+					mediaAlt: '',
+					focalPoint: undefined,
+					mediaWidth: 50,
+					mediaSizeSlug: undefined,
+				} );
+			} }
+			dropdownMenuProps={ dropdownMenuProps }
+		>
+			<ToolsPanelItem
+				label={ __( 'Media width' ) }
+				isShownByDefault
+				hasValue={ () => mediaWidth !== 50 }
+				onDeselect={ () => setAttributes( { mediaWidth: 50 } ) }
+			>
+				<RangeControl
+					__nextHasNoMarginBottom
+					__next40pxDefaultSize
+					label={ __( 'Media width' ) }
+					value={ temporaryMediaWidth || mediaWidth }
+					onChange={ commitWidthChange }
+					min={ WIDTH_CONSTRAINT_PERCENTAGE }
+					max={ 100 - WIDTH_CONSTRAINT_PERCENTAGE }
+				/>
+			</ToolsPanelItem>
+			<ToolsPanelItem
 				label={ __( 'Stack on mobile' ) }
-				checked={ isStackedOnMobile }
-				onChange={ () =>
-					setAttributes( {
-						isStackedOnMobile: ! isStackedOnMobile,
-					} )
+				isShownByDefault
+				hasValue={ () => ! isStackedOnMobile }
+				onDeselect={ () =>
+					setAttributes( { isStackedOnMobile: true } )
 				}
-			/>
-			{ mediaType === 'image' && (
+			>
 				<ToggleControl
-					label={ __( 'Crop image to fill entire column' ) }
-					checked={ imageFill }
+					__nextHasNoMarginBottom
+					label={ __( 'Stack on mobile' ) }
+					checked={ isStackedOnMobile }
 					onChange={ () =>
 						setAttributes( {
-							imageFill: ! imageFill,
+							isStackedOnMobile: ! isStackedOnMobile,
 						} )
 					}
 				/>
-			) }
-			{ imageFill && (
-				<FocalPointPicker
-					label={ __( 'Focal point picker' ) }
-					url={ mediaUrl }
-					value={ focalPoint }
-					onChange={ ( value ) =>
-						setAttributes( { focalPoint: value } )
-					}
-				/>
-			) }
+			</ToolsPanelItem>
 			{ mediaType === 'image' && (
-				<TextareaControl
-					label={ __( 'Alt text (alternative text)' ) }
-					value={ mediaAlt }
-					onChange={ onMediaAltChange }
-					help={
-						<>
-							<ExternalLink href="https://www.w3.org/WAI/tutorials/images/decision-tree">
-								{ __( 'Describe the purpose of the image' ) }
-							</ExternalLink>
-							{ __(
-								'Leave empty if the image is purely decorative.'
-							) }
-						</>
-					}
+				<ToolsPanelItem
+					label={ __( 'Crop image to fill' ) }
+					isShownByDefault
+					hasValue={ () => !! imageFill }
+					onDeselect={ () => setAttributes( { imageFill: false } ) }
+				>
+					<ToggleControl
+						__nextHasNoMarginBottom
+						label={ __( 'Crop image to fill' ) }
+						checked={ !! imageFill }
+						onChange={ () =>
+							setAttributes( {
+								imageFill: ! imageFill,
+							} )
+						}
+					/>
+				</ToolsPanelItem>
+			) }
+			{ imageFill &&
+				( mediaUrl || featuredImageURL ) &&
+				mediaType === 'image' && (
+					<ToolsPanelItem
+						label={ __( 'Focal point' ) }
+						isShownByDefault
+						hasValue={ () => !! focalPoint }
+						onDeselect={ () =>
+							setAttributes( { focalPoint: undefined } )
+						}
+					>
+						<FocalPointPicker
+							__nextHasNoMarginBottom
+							label={ __( 'Focal point' ) }
+							url={
+								useFeaturedImage && featuredImageURL
+									? featuredImageURL
+									: mediaUrl
+							}
+							value={ focalPoint }
+							onChange={ ( value ) =>
+								setAttributes( { focalPoint: value } )
+							}
+							onDragStart={ imperativeFocalPointPreview }
+							onDrag={ imperativeFocalPointPreview }
+						/>
+					</ToolsPanelItem>
+				) }
+			{ mediaType === 'image' && mediaUrl && ! useFeaturedImage && (
+				<ToolsPanelItem
+					label={ __( 'Alternative text' ) }
+					isShownByDefault
+					hasValue={ () => !! mediaAlt }
+					onDeselect={ () => setAttributes( { mediaAlt: '' } ) }
+				>
+					<TextareaControl
+						__nextHasNoMarginBottom
+						label={ __( 'Alternative text' ) }
+						value={ mediaAlt }
+						onChange={ onMediaAltChange }
+						help={
+							<>
+								<ExternalLink
+									href={
+										// translators: Localized tutorial, if one exists. W3C Web Accessibility Initiative link has list of existing translations.
+										__(
+											'https://www.w3.org/WAI/tutorials/images/decision-tree/'
+										)
+									}
+								>
+									{ __(
+										'Describe the purpose of the image.'
+									) }
+								</ExternalLink>
+								<br />
+								{ __( 'Leave empty if decorative.' ) }
+							</>
+						}
+					/>
+				</ToolsPanelItem>
+			) }
+			{ mediaType === 'image' && ! useFeaturedImage && (
+				<ResolutionTool
+					value={ mediaSizeSlug }
+					options={ imageSizeOptions }
+					onChange={ updateImage }
 				/>
 			) }
-		</PanelBody>
+		</ToolsPanel>
 	);
+
+	const blockProps = useBlockProps( {
+		className: classNames,
+		style,
+	} );
+
+	const innerBlocksProps = useInnerBlocksProps(
+		{ className: 'wp-block-media-text__content' },
+		{ template: TEMPLATE, allowedBlocks }
+	);
+
+	const blockEditingMode = useBlockEditingMode();
 
 	return (
 		<>
 			<InspectorControls>{ mediaTextGeneralSettings }</InspectorControls>
-			<BlockControls>
-				<ToolbarGroup controls={ toolbarControls } />
-				<BlockVerticalAlignmentToolbar
-					onChange={ onVerticalAlignmentChange }
-					value={ verticalAlignment }
-				/>
-				{ mediaType === 'image' && (
-					<ToolbarGroup>
-						<ImageURLInputUI
-							url={ href || '' }
-							onChangeUrl={ onSetHref }
-							linkDestination={ linkDestination }
-							mediaType={ mediaType }
-							mediaUrl={ image && image.source_url }
-							mediaLink={ image && image.link }
-							linkTarget={ linkTarget }
-							linkClass={ linkClass }
-							rel={ rel }
+			<BlockControls group="block">
+				{ blockEditingMode === 'default' && (
+					<>
+						<BlockVerticalAlignmentControl
+							onChange={ onVerticalAlignmentChange }
+							value={ verticalAlignment }
 						/>
-					</ToolbarGroup>
+						<ToolbarButton
+							icon={ pullLeft }
+							title={ __( 'Show media on left' ) }
+							isActive={ mediaPosition === 'left' }
+							onClick={ () =>
+								setAttributes( { mediaPosition: 'left' } )
+							}
+						/>
+						<ToolbarButton
+							icon={ pullRight }
+							title={ __( 'Show media on right' ) }
+							isActive={ mediaPosition === 'right' }
+							onClick={ () =>
+								setAttributes( { mediaPosition: 'right' } )
+							}
+						/>
+					</>
+				) }
+
+				{ mediaType === 'image' && ! useFeaturedImage && (
+					<ImageURLInputUI
+						url={ href || '' }
+						onChangeUrl={ onSetHref }
+						linkDestination={ linkDestination }
+						mediaType={ mediaType }
+						mediaUrl={ image && image.source_url }
+						mediaLink={ image && image.link }
+						linkTarget={ linkTarget }
+						linkClass={ linkClass }
+						rel={ rel }
+					/>
 				) }
 			</BlockControls>
-			<Block.div className={ classNames } style={ style }>
+			<div { ...blockProps }>
+				{ mediaPosition === 'right' && <div { ...innerBlocksProps } /> }
 				<MediaContainer
 					className="wp-block-media-text__media"
 					onSelectMedia={ onSelectMedia }
 					onWidthChange={ onWidthChange }
 					commitWidthChange={ commitWidthChange }
+					refMedia={ refMedia }
+					enableResize={ blockEditingMode === 'default' }
+					toggleUseFeaturedImage={ toggleUseFeaturedImage }
 					{ ...{
 						focalPoint,
 						imageFill,
@@ -281,17 +494,13 @@ function MediaTextEdit( { attributes, isSelected, setAttributes } ) {
 						mediaType,
 						mediaUrl,
 						mediaWidth,
+						useFeaturedImage,
+						featuredImageURL,
+						featuredImageAlt,
 					} }
 				/>
-				<InnerBlocks
-					__experimentalTagName="div"
-					__experimentalPassedProps={ {
-						className: 'wp-block-media-text__content',
-					} }
-					template={ TEMPLATE }
-					templateInsertUpdatesSelection={ false }
-				/>
-			</Block.div>
+				{ mediaPosition !== 'right' && <div { ...innerBlocksProps } /> }
+			</div>
 		</>
 	);
 }

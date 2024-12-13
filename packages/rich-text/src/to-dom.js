@@ -4,6 +4,9 @@
 
 import { toTree } from './to-tree';
 import { createElement } from './create-element';
+import { isRangeEqual } from './is-range-equal';
+
+/** @typedef {import('./types').RichTextValue} RichTextValue */
 
 /**
  * Creates a path as an array of indices from the given root node to the given
@@ -54,6 +57,10 @@ function getNodeByPath( node, path ) {
 }
 
 function append( element, child ) {
+	if ( child.html !== undefined ) {
+		return ( element.innerHTML += child.html );
+	}
+
 	if ( typeof child === 'string' ) {
 		child = element.ownerDocument.createTextNode( child );
 	}
@@ -61,10 +68,16 @@ function append( element, child ) {
 	const { type, attributes } = child;
 
 	if ( type ) {
-		child = element.ownerDocument.createElement( type );
+		if ( type === '#comment' ) {
+			child = element.ownerDocument.createComment(
+				attributes[ 'data-rich-text-comment' ]
+			);
+		} else {
+			child = element.ownerDocument.createElement( type );
 
-		for ( const key in attributes ) {
-			child.setAttribute( key, attributes[ key ] );
+			for ( const key in attributes ) {
+				child.setAttribute( key, attributes[ key ] );
+			}
 		}
 	}
 
@@ -97,7 +110,6 @@ function remove( node ) {
 
 export function toDom( {
 	value,
-	multilineTag,
 	prepareEditableTree,
 	isEditableTree = true,
 	placeholder,
@@ -127,7 +139,6 @@ export function toDom( {
 
 	const tree = toTree( {
 		value,
-		multilineTag,
 		createEmpty,
 		append,
 		getLastChild,
@@ -158,19 +169,18 @@ export function toDom( {
 
 /**
  * Create an `Element` tree from a Rich Text value and applies the difference to
- * the `Element` tree contained by `current`. If a `multilineTag` is provided,
- * text separated by two new lines will be wrapped in an `Element` of that type.
+ * the `Element` tree contained by `current`.
  *
- * @param {Object}      $1                        Named arguments.
- * @param {Object}      $1.value                  Value to apply.
- * @param {HTMLElement} $1.current                The live root node to apply the element tree to.
- * @param {string}      [$1.multilineTag]         Multiline tag.
- * @param {Array}       [$1.multilineWrapperTags] Tags where lines can be found if nesting is possible.
+ * @param {Object}        $1                       Named arguments.
+ * @param {RichTextValue} $1.value                 Value to apply.
+ * @param {HTMLElement}   $1.current               The live root node to apply the element tree to.
+ * @param {Function}      [$1.prepareEditableTree] Function to filter editorable formats.
+ * @param {boolean}       [$1.__unstableDomOnly]   Only apply elements, no selection.
+ * @param {string}        [$1.placeholder]         Placeholder text.
  */
 export function apply( {
 	value,
 	current,
-	multilineTag,
 	prepareEditableTree,
 	__unstableDomOnly,
 	placeholder,
@@ -178,7 +188,6 @@ export function apply( {
 	// Construct a new element tree in memory.
 	const { body, selection } = toDom( {
 		value,
-		multilineTag,
 		prepareEditableTree,
 		placeholder,
 		doc: current.ownerDocument,
@@ -248,25 +257,6 @@ export function applyValue( future, current ) {
 	while ( current.childNodes[ i ] ) {
 		current.removeChild( current.childNodes[ i ] );
 	}
-}
-
-/**
- * Returns true if two ranges are equal, or false otherwise. Ranges are
- * considered equal if their start and end occur in the same container and
- * offset.
- *
- * @param {Range} a First range object to test.
- * @param {Range} b First range object to test.
- *
- * @return {boolean} Whether the two ranges are equal.
- */
-function isRangeEqual( a, b ) {
-	return (
-		a.startContainer === b.startContainer &&
-		a.startOffset === b.startOffset &&
-		a.endContainer === b.endContainer &&
-		a.endOffset === b.endOffset
-	);
 }
 
 export function applySelection( { startPath, endPath }, current ) {

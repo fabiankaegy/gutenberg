@@ -1,3 +1,4 @@
 .editor-post-trash.components-button {
-	margin-left: -6px; // Optically align the button with elements above.
+	flex-grow: 1;
+	justify-content: center;
 }

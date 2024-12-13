@@ -5,6 +5,7 @@ import {
 	AmazonIcon,
 	BandcampIcon,
 	BehanceIcon,
+	BlueskyIcon,
 	ChainIcon,
 	CodepenIcon,
 	DeviantArtIcon,
@@ -19,6 +20,7 @@ import {
 	GoodreadsIcon,
 	GoogleIcon,
 	GitHubIcon,
+	GravatarIcon,
 	InstagramIcon,
 	LastfmIcon,
 	LinkedInIcon,
@@ -26,6 +28,7 @@ import {
 	MastodonIcon,
 	MeetupIcon,
 	MediumIcon,
+	PatreonIcon,
 	PinterestIcon,
 	PocketIcon,
 	RedditIcon,
@@ -33,12 +36,17 @@ import {
 	SnapchatIcon,
 	SoundCloudIcon,
 	SpotifyIcon,
+	TelegramIcon,
+	ThreadsIcon,
+	TiktokIcon,
 	TumblrIcon,
 	TwitchIcon,
 	TwitterIcon,
 	VimeoIcon,
 	VkIcon,
+	WhatsAppIcon,
 	WordPressIcon,
+	XIcon,
 	YelpIcon,
 	YouTubeIcon,
 } from './icons';
@@ -75,6 +83,12 @@ const variations = [
 		attributes: { service: 'behance' },
 		title: 'Behance',
 		icon: BehanceIcon,
+	},
+	{
+		name: 'bluesky',
+		attributes: { service: 'bluesky' },
+		title: 'Bluesky',
+		icon: BlueskyIcon,
 	},
 	{
 		name: 'chain',
@@ -155,6 +169,12 @@ const variations = [
 		icon: GitHubIcon,
 	},
 	{
+		name: 'gravatar',
+		attributes: { service: 'gravatar' },
+		title: 'Gravatar',
+		icon: GravatarIcon,
+	},
+	{
 		name: 'instagram',
 		attributes: { service: 'instagram' },
 		title: 'Instagram',
@@ -176,6 +196,7 @@ const variations = [
 		name: 'mail',
 		attributes: { service: 'mail' },
 		title: 'Mail',
+		keywords: [ 'email', 'e-mail' ],
 		icon: MailIcon,
 	},
 	{
@@ -195,6 +216,12 @@ const variations = [
 		attributes: { service: 'medium' },
 		title: 'Medium',
 		icon: MediumIcon,
+	},
+	{
+		name: 'patreon',
+		attributes: { service: 'patreon' },
+		title: 'Patreon',
+		icon: PatreonIcon,
 	},
 	{
 		name: 'pinterest',
@@ -239,6 +266,24 @@ const variations = [
 		icon: SpotifyIcon,
 	},
 	{
+		name: 'telegram',
+		attributes: { service: 'telegram' },
+		title: 'Telegram',
+		icon: TelegramIcon,
+	},
+	{
+		name: 'threads',
+		attributes: { service: 'threads' },
+		title: 'Threads',
+		icon: ThreadsIcon,
+	},
+	{
+		name: 'tiktok',
+		attributes: { service: 'tiktok' },
+		title: 'TikTok',
+		icon: TiktokIcon,
+	},
+	{
 		name: 'tumblr',
 		attributes: { service: 'tumblr' },
 		title: 'Tumblr',
@@ -269,6 +314,19 @@ const variations = [
 		icon: VkIcon,
 	},
 	{
+		name: 'whatsapp',
+		attributes: { service: 'whatsapp' },
+		title: 'WhatsApp',
+		icon: WhatsAppIcon,
+	},
+	{
+		name: 'x',
+		attributes: { service: 'x' },
+		keywords: [ 'twitter' ],
+		title: 'X',
+		icon: XIcon,
+	},
+	{
 		name: 'yelp',
 		attributes: { service: 'yelp' },
 		title: 'Yelp',
@@ -281,5 +339,18 @@ const variations = [
 		icon: YouTubeIcon,
 	},
 ];
+
+/**
+ * Add `isActive` function to all `social link` variations, if not defined.
+ * `isActive` function is used to find a variation match from a created
+ *  Block by providing its attributes.
+ */
+variations.forEach( ( variation ) => {
+	if ( variation.isActive ) {
+		return;
+	}
+	variation.isActive = ( blockAttributes, variationAttributes ) =>
+		blockAttributes.service === variationAttributes.service;
+} );
 
 export default variations;

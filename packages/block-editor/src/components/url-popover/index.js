@@ -2,54 +2,83 @@
  * WordPress dependencies
  */
 import { __ } from '@wordpress/i18n';
-import { Component } from '@wordpress/element';
-import { Button, Popover } from '@wordpress/components';
+import { forwardRef, useState } from '@wordpress/element';
+import {
+	Button,
+	Popover,
+	privateApis as componentsPrivateApis,
+} from '@wordpress/components';
 import { chevronDown } from '@wordpress/icons';
+import deprecated from '@wordpress/deprecated';
 
 /**
  * Internal dependencies
  */
 import LinkViewer from './link-viewer';
 import LinkEditor from './link-editor';
+import { unlock } from '../../lock-unlock';
 
-class URLPopover extends Component {
-	constructor() {
-		super( ...arguments );
+const { __experimentalPopoverLegacyPositionToPlacement } = unlock(
+	componentsPrivateApis
+);
 
-		this.toggleSettingsVisibility = this.toggleSettingsVisibility.bind(
-			this
-		);
+const DEFAULT_PLACEMENT = 'bottom';
 
-		this.state = {
-			isSettingsExpanded: false,
-		};
-	}
-
-	toggleSettingsVisibility() {
-		this.setState( {
-			isSettingsExpanded: ! this.state.isSettingsExpanded,
-		} );
-	}
-
-	render() {
-		const {
+const URLPopover = forwardRef(
+	(
+		{
 			additionalControls,
 			children,
 			renderSettings,
-			position = 'bottom center',
+			// The DEFAULT_PLACEMENT value is assigned inside the function's body
+			placement,
 			focusOnMount = 'firstElement',
+			// Deprecated
+			position,
+			// Rest
 			...popoverProps
-		} = this.props;
+		},
+		ref
+	) => {
+		if ( position !== undefined ) {
+			deprecated( '`position` prop in wp.blockEditor.URLPopover', {
+				since: '6.2',
+				alternative: '`placement` prop',
+			} );
+		}
 
-		const { isSettingsExpanded } = this.state;
+		// Compute popover's placement:
+		// - give priority to `placement` prop, if defined
+		// - otherwise, compute it from the legacy `position` prop (if defined)
+		// - finally, fallback to the DEFAULT_PLACEMENT.
+		let computedPlacement;
+		if ( placement !== undefined ) {
+			computedPlacement = placement;
+		} else if ( position !== undefined ) {
+			computedPlacement =
+				__experimentalPopoverLegacyPositionToPlacement( position );
+		}
+		computedPlacement = computedPlacement || DEFAULT_PLACEMENT;
+
+		const [ isSettingsExpanded, setIsSettingsExpanded ] = useState( false );
 
 		const showSettings = !! renderSettings && isSettingsExpanded;
 
+		const toggleSettingsVisibility = () => {
+			setIsSettingsExpanded( ! isSettingsExpanded );
+		};
+
 		return (
 			<Popover
+				ref={ ref }
+				role="dialog"
+				aria-modal="true"
+				aria-label={ __( 'Edit URL' ) }
 				className="block-editor-url-popover"
 				focusOnMount={ focusOnMount }
-				position={ position }
+				placement={ computedPlacement }
+				shift
+				variant="toolbar"
 				{ ...popoverProps }
 			>
 				<div className="block-editor-url-popover__input-container">
@@ -60,17 +89,18 @@ class URLPopover extends Component {
 								className="block-editor-url-popover__settings-toggle"
 								icon={ chevronDown }
 								label={ __( 'Link settings' ) }
-								onClick={ this.toggleSettingsVisibility }
+								onClick={ toggleSettingsVisibility }
 								aria-expanded={ isSettingsExpanded }
+								size="compact"
 							/>
 						) }
 					</div>
-					{ showSettings && (
-						<div className="block-editor-url-popover__row block-editor-url-popover__settings">
-							{ renderSettings() }
-						</div>
-					) }
 				</div>
+				{ showSettings && (
+					<div className="block-editor-url-popover__settings">
+						{ renderSettings() }
+					</div>
+				) }
 				{ additionalControls && ! showSettings && (
 					<div className="block-editor-url-popover__additional-controls">
 						{ additionalControls }
@@ -79,13 +109,13 @@ class URLPopover extends Component {
 			</Popover>
 		);
 	}
-}
+);
 
 URLPopover.LinkEditor = LinkEditor;
 
 URLPopover.LinkViewer = LinkViewer;
 
 /**
- * @see https://github.com/WordPress/gutenberg/blob/master/packages/block-editor/src/components/url-popover/README.md
+ * @see https://github.com/WordPress/gutenberg/blob/HEAD/packages/block-editor/src/components/url-popover/README.md
  */
 export default URLPopover;

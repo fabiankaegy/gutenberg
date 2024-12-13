@@ -1,29 +1,52 @@
 /**
- * External dependencies
- */
-import { isEmpty } from 'lodash';
-
-/**
  * WordPress dependencies
  */
 import { createHigherOrderComponent } from '@wordpress/compose';
-import { withSelect } from '@wordpress/data';
 
-export default createHigherOrderComponent(
-	withSelect( ( select, ownProps ) => {
-		const settings = select( 'core/block-editor' ).getSettings();
-		const colors =
-			ownProps.colors === undefined ? settings.colors : ownProps.colors;
+/**
+ * Internal dependencies
+ */
+import { useSettings } from '../use-settings';
 
-		const disableCustomColors =
-			ownProps.disableCustomColors === undefined
-				? settings.disableCustomColors
-				: ownProps.disableCustomColors;
-		return {
-			colors,
-			disableCustomColors,
-			hasColorsToChoose: ! isEmpty( colors ) || ! disableCustomColors,
-		};
-	} ),
-	'withColorContext'
-);
+export default createHigherOrderComponent( ( WrappedComponent ) => {
+	return ( props ) => {
+		// Get the default colors, theme colors, and custom colors
+		const [
+			defaultColors,
+			themeColors,
+			customColors,
+			enableCustomColors,
+			enableDefaultColors,
+		] = useSettings(
+			'color.palette.default',
+			'color.palette.theme',
+			'color.palette.custom',
+			'color.custom',
+			'color.defaultPalette'
+		);
+
+		const _colors = enableDefaultColors
+			? [
+					...( themeColors || [] ),
+					...( defaultColors || [] ),
+					...( customColors || [] ),
+			  ]
+			: [ ...( themeColors || [] ), ...( customColors || [] ) ];
+
+		const { colors = _colors, disableCustomColors = ! enableCustomColors } =
+			props;
+
+		const hasColorsToChoose =
+			( colors && colors.length > 0 ) || ! disableCustomColors;
+		return (
+			<WrappedComponent
+				{ ...{
+					...props,
+					colors,
+					disableCustomColors,
+					hasColorsToChoose,
+				} }
+			/>
+		);
+	};
+}, 'withColorContext' );
